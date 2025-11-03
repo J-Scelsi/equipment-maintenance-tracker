@@ -17,10 +17,12 @@ class RepairLog:
         """String representation for display."""
         return f"[{self.date} by {self.technician}]: {self.description}"
 
+    def to_dict(self):
+        """Converts object to dictionary for JSON serialization."""
+        return self.__dict__
+
 class Asset:
-    """Represents a physical asset (e.g., Computer Component, Automotive Part).
-    This class is the foundation of our OOP structure.
-    """
+    """Represents a physical asset (e.g., Computer Component, Automotive Part)."""
     next_id = 1
     
     def __init__(self, name, asset_type, location, status="Active"):
@@ -31,7 +33,7 @@ class Asset:
         self.name = name
         self.asset_type = asset_type
         self.location = location
-        self.status = status # e.g., 'Active', 'Under Repair', 'Retired'
+        self.status = status 
         self.repair_history = [] # Stores a list of RepairLog objects
 
     def log_repair(self, description, technician="Self"):
@@ -39,10 +41,11 @@ class Asset:
         date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
         log = RepairLog(date_str, description, technician)
         self.repair_history.append(log)
+        self.status = "Active" if "fixed" in description.lower() else self.status
         
     def __str__(self):
         """String representation for printing asset details."""
-        return f"ID: {self.asset_id} | Name: {self.name} | Type: {self.asset_type} | Status: {self.status}"
+        return f"ID: {self.asset_id:<4} | Name: {self.name:<20} | Type: {self.asset_type:<15} | Status: {self.status}"
 
 def initialize_tracker():
     """Loads existing asset data from the JSON file or starts a new list."""
@@ -84,18 +87,15 @@ def initialize_tracker():
 
 def save_tracker():
     """Saves the current ASSET_LIST to the JSON file (Serialization)."""
-    # Custom encoding logic is needed because we can't save the raw object list
     data_to_save = []
     for asset in ASSET_LIST:
-        # Convert the complex object structure into a simple dictionary for JSON
         asset_dict = {
             'asset_id': asset.asset_id,
             'name': asset.name,
             'asset_type': asset.asset_type,
             'location': asset.location,
             'status': asset.status,
-            # Convert repair_history (list of RepairLog objects) to list of dictionaries
-            'repair_history': [log.__dict__ for log in asset.repair_history]
+            'repair_history': [log.to_dict() for log in asset.repair_history]
         }
         data_to_save.append(asset_dict)
 
@@ -106,6 +106,118 @@ def save_tracker():
     except Exception as e:
         print(f"\n[Error] Failed to save data: {e}")
 
+def add_new_asset():
+    """Implements menu option 1: Collects input and creates a new Asset object."""
+    print("\n--- Add New Asset ---")
+    name = input("Asset Name (e.g., 'Laptop Power Supply'): ").strip()
+    asset_type = input("Asset Type (e.g., 'Hardware', 'Tool', 'Vehicle Part'): ").strip()
+    location = input("Location (e.g., 'Lab Shelf A', 'Garage Bay 3'): ").strip()
+
+    if not all([name, asset_type, location]):
+        print("[Error] All fields must be filled.")
+        return
+
+    new_asset = Asset(name, asset_type, location)
+    ASSET_LIST.append(new_asset)
+    print(f"\n[Success] Asset added: {new_asset}")
+    
+def find_asset(asset_id):
+    """Utility function to find an asset by ID."""
+    try:
+        asset_id = int(asset_id)
+        for asset in ASSET_LIST:
+            if asset.asset_id == asset_id:
+                return asset
+        print(f"[Error] Asset with ID {asset_id} not found.")
+        return None
+    except ValueError:
+        print("[Error] Invalid ID. Please enter a number.")
+        return None
+
+def log_asset_repair():
+    """Implements menu option 2: Finds an asset and adds a RepairLog."""
+    if not ASSET_LIST:
+        print("\n[Warning] No assets in the system. Please add an asset first.")
+        return
+        
+    print("\n--- Log Repair/Maintenance ---")
+    asset_id = input("Enter Asset ID to log repair: ").strip()
+    asset = find_asset(asset_id)
+
+    if asset:
+        description = input("Enter Repair Description (e.g., 'Replaced steering pump, status fixed'): ").strip()
+        technician = input("Technician Name (or leave blank for 'Self'): ").strip() or "Self"
+        
+        asset.log_repair(description, technician)
+        print(f"\n[Success] Repair logged for Asset ID {asset.asset_id} ({asset.name}).")
+        if "fixed" in description.lower():
+             asset.status = "Active"
+             print(f"Status updated to: Active")
+        elif "broken" in description.lower():
+             asset.status = "Under Repair"
+             print(f"Status updated to: Under Repair")
+        else:
+             print(f"Status remains: {asset.status}")
+
+
+def view_asset_details():
+    """Implements menu option 3: Views details of a specific asset."""
+    if not ASSET_LIST:
+        print("\n[Warning] No assets in the system.")
+        return
+
+    print("\n--- View Asset Details ---")
+    query = input("Enter Asset ID or search keyword (Name/Type/Location): ").strip()
+    
+    found_assets = []
+    
+    # Try searching by ID first
+    try:
+        asset_id = int(query)
+        asset = find_asset(asset_id)
+        if asset:
+            found_assets.append(asset)
+    except ValueError:
+        # Search by keyword if not an ID
+        query_lower = query.lower()
+        for asset in ASSET_LIST:
+            if query_lower in asset.name.lower() or \
+               query_lower in asset.asset_type.lower() or \
+               query_lower in asset.location.lower():
+                found_assets.append(asset)
+    
+    if not found_assets:
+        print(f"[Warning] No assets found matching '{query}'.")
+        return
+        
+    for asset in found_assets:
+        print("\n" + "="*50)
+        print(f"Asset ID: {asset.asset_id}")
+        print(f"Name: {asset.name}")
+        print(f"Type: {asset.asset_type}")
+        print(f"Location: {asset.location}")
+        print(f"Status: {asset.status}")
+        print("-" * 50)
+        print("Repair History:")
+        if asset.repair_history:
+            for log in asset.repair_history:
+                print(f"  - {log}")
+        else:
+            print("  No repair history recorded.")
+        print("="*50)
+
+def view_all_assets():
+    """Implements menu option 4: Prints a summary of all assets."""
+    print("\n--- All Assets Summary ---")
+    if not ASSET_LIST:
+        print("[Warning] No assets in the system.")
+        return
+        
+    print("ID   | Name                 | Type            | Status")
+    print("-----|----------------------|-----------------|-----------------")
+    for asset in ASSET_LIST:
+        print(asset)
+        
 def main_menu():
     """Displays the main command-line menu."""
     print("\n" + "="*40)
@@ -129,18 +241,17 @@ if __name__ == "__main__":
 
     initialize_tracker()
     
-    # We will add the implementation functions (1, 2, 3, 4) in the next step
     while True:
         choice = main_menu()
         
         if choice == '1':
-            print("\n[WIP] Adding asset functionality coming soon!")
+            add_new_asset()
         elif choice == '2':
-            print("\n[WIP] Logging repair functionality coming soon!")
+            log_asset_repair()
         elif choice == '3':
-            print("\n[WIP] Viewing asset details coming soon!")
+            view_asset_details()
         elif choice == '4':
-            print("\n[WIP] Viewing all assets functionality coming soon!")
+            view_all_assets()
         elif choice == '5':
             save_tracker()
             print("Exiting Tracker. Goodbye!")
